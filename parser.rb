@@ -1,25 +1,23 @@
 require 'open-uri'
 require 'nokogiri'
 require 'digest'
-require 'mechanize'
+require 'curl'
 
 
 class Parser
 
-  def initialize
+  @@output_file = File.open("./catalog.txt", "w")
 
-    @catalog_url  = 'http://www.a-yabloko.ru/catalog/' # кодировка страницы windows-1251
-    @catalog_html = open(@catalog_url)
+  def initialize(url)
+    @catalog_url  = url # кодировка страницы windows-1251
+    @catalog_html = Curl.get(@catalog_url).body_str
     @catalog_doc  = Nokogiri::HTML(@catalog_html)
     @catalog_doc.encoding = 'UTF-8' # конвертируем 1251 to UTF-8
-
-    @agent = Mechanize.new
-    @page  = @agent.get(@catalog_url)
-    puts @page
-
-    @@output_file = File.open("./catalog.txt", "w")
+    puts @catalog_doc
   end
 
+  # Все картинки на сервере лежат в одной папке,
+  # а значит имеют уникальные имена, их и возьмём.
   def download(pic)
     open('pictures/'+pic, 'wb') do |file|
       file << open('http://www.a-yabloko.ru/storage/catalog/.thumbs/'+pic).read
@@ -27,7 +25,8 @@ class Parser
   end
 
   # Метод составляет список категорий с главной страницы сайта и загружает соответствующие картинки
-  def scan_main
+  def scan_groups
+    #puts @catalog_doc.css('.children a')[0]
     @catalog_doc.css('.children a').each do |string|
       type    = "Group"
       group   = "-----"
@@ -39,16 +38,18 @@ class Parser
       $,      = "\t" # разделитель для print
       @@output_file.print id, type, group, picture, name
       @@output_file.puts
+      link = string.to_s.scan(%r{href="(.*)" style})
+      puts link
+      #parser = Parser.new(link)
     end
   end
 
-  def scan_groups
+  def scan_goods
 
   end
 
 end
 
-parser = Parser.new
-parser.scan_main
+parser = Parser.new('http://www.a-yabloko.ru/catalog')
 
 parser.scan_groups
