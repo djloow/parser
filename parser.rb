@@ -3,18 +3,17 @@ require 'csv'
 require 'nokogiri'
 require 'digest'
 require 'curl'
-require 'csv'
 
 class Parser
 
   @@headers = %w{id, type, group, pic, name}
-  puts @@headers.inspect
-  @@catalog  ||= CSV.open("./catalog.txt", "w", col_sep: "\t", encoding: 'UTF-8', headers: @@headers)
+  @@catalog  ||= CSV.read("catalog.txt", "a+", col_sep: "\t", headers: true, converters: :numeric, :header_converters => :symbol).map { |row| row.to_h }
   @@depth          = 0    # глубина рекурсии
   @@col_sep        = "\t" # разделитель для print
   @@total          = 0    # общее количество записей
-  @@total_in_group = Hash.new
+  @@total_in_group = Hash.new(0)
   @@current_group  = ""
+  @@start          = Time.now
 
   def initialize(url)
     @catalog_html = Curl.get(url).body_str # скачиваем страницу, она в windows-1251
@@ -24,12 +23,13 @@ class Parser
 
   # Все картинки на сервере лежат в одной папке,
   # а значит имеют уникальные имена, их и возьмём.
-  def download_gr(pic)
+  def download_group(pic)
     open('pictures/'+pic, 'wb') do |file|
       file << open('http://www.a-yabloko.ru/storage/catalog/.thumbs/'+pic).read
     end
   end
 
+  # Ладно, не в одной, а в двух папках.
   def download_item(pic)
     open('pictures/'+pic, 'wb') do |file|
       file << open('http://www.a-yabloko.ru/storage/catalog/goods/.thumbs/'+pic).read
@@ -49,13 +49,13 @@ class Parser
       puts name
       id      = Digest::MD5.hexdigest(type+group+name)
       picture = row.to_s.scan(%r{thumbs/(.*)\)">}m)[0]
-      download_gr(picture[0]) unless picture.nil? # если картинка есть - скачиваем её
+      download_group(picture[0]) unless picture.nil? # если картинка есть - скачиваем её
       picture = picture ? picture[0] : '-----------------------------------------' # если картинки нет - ставим прочерк
       parser = Parser.new('http://www.a-yabloko.ru'+row['href'])
-      add_record(id, type, group, picture, name)
+      add_record([id, type, group, picture, name])
       parser.scan_groups
     end
-    scan_goods if rows.empty?
+    #scan_goods if rows.empty?
 
     @@depth -= 1
   end
@@ -72,10 +72,10 @@ class Parser
       @@current_group = name
       id      = Digest::MD5.hexdigest(type+group+name)
       picture = row.to_s.scan(%r{thumbs/(.*)\)">}m)[0]
-      download_gr(picture[0]) unless picture.nil? # если картинка есть - скачиваем её
+      download_group(picture[0]) unless picture.nil? # если картинка есть - скачиваем её
       picture = picture ? picture[0] : '-----------------------------------------' # если картинки нет - ставим прочерк
       parser = Parser.new('http://www.a-yabloko.ru'+links.shift)
-      add_record(id, type, group, picture, name)
+      add_record([id, type, group, picture, name])
       parser.scan_groups
     end
   end
@@ -104,18 +104,29 @@ class Parser
         picture = picture[0]  # если картинки нет - ставим прочерк
         download_item(picture[0]) # если картинка есть - скачиваем её
       end
-      add_record(id, type, group, picture, name)
+      add_record([id, type, group, picture, name])
     end
   end
 
-  def add_record(id, type, group, picture, name)
-    @@catalog << [id, type, group, picture, name]
-    #puts CSV::Table(@@catalog)['name']
+  def add_record(arr)
+    @@catalog << arr
     @@total += 1
   end
 
+  def save
+    @@catalog.uniq!
+    CSV.open("catalog.txt", "w", col_sep: "\t", encoding: 'UTF-8', headers: true) do |cat|
+      @@catalog.each do |row|
+        cat << row
+      end
+    end
+  end
+
   def start
+    add_record(@@headers)
     scan_main
+    save
+    puts Time.now - @@start
   end
 
 end
