@@ -94,7 +94,6 @@ class Parser
     group = @catalog_doc.css('#content.bar h1').text
     rows = @catalog_doc.css('div.goods .img')
     rows.each do |row|
-      #puts row['title']
       type = "Item"
       name = row['title']
       id = Digest::MD5.hexdigest(type+group+name)
