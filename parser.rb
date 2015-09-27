@@ -14,6 +14,7 @@ class Parser
   @@total_in_group ||= Hash.new(0)
   @@current_group  ||= ""
   @@start          ||= Time.now
+  @@wo_pic         ||= 0
 
   def initialize(url)
     @catalog_html = open(url, "Cookie" => "pgs=500") # скачиваем страницу, она в windows-1251
@@ -40,7 +41,7 @@ class Parser
   def scan_groups
     puts "-Scanning groups..."
     @@depth += 1
-    puts "***Depth is #{@@depth}"
+    #puts "***Depth is #{@@depth}"
     group = @catalog_doc.css('#content.bar h1').text
     rows = @catalog_doc.css('.children a')
     rows.each do |row|
@@ -100,13 +101,14 @@ class Parser
       picture = row.to_s.scan(%r{thumbs/(.*)'\)" }m)[0]
       if picture.nil? || picture[0] == 'no_img_w280h140.png'
         picture = '-----------------------------------------'
+        @@wo_pic += 1
       else
         picture = picture[0]  # если картинки нет - ставим прочерк
         download_item(picture) # если картинка есть - скачиваем её
       end
       add_record([type, group, picture, name])
       @@total += 1
-      puts @@total
+      #puts @@total
       @@total_in_group[@@current_group] += 1
     end
   end
@@ -117,11 +119,15 @@ class Parser
   end
 
   def print_stat 
-    puts @@total_in_group.inspect
+    @@total_in_group.each do |group, count|
+      pc = count/@@total
+      puts "#{group}: #{count} items, #{pc}% of total"
+    end
+    puts "Percent goods with pictures: ", ((@@total - @@wo_pic) / @@total.to_f)
   end
 
   def save
-    @@catalog.uniq!
+    @@catalog.uniq!.compact!
     CSV.open("catalog.txt", "w", col_sep: "\t", encoding: 'UTF-8', headers: true) do |cat|
       @@catalog.each do |row|
         cat << row
@@ -133,8 +139,8 @@ class Parser
     add_record(@@headers)
     scan_main
     save
-    puts Time.now - @@start
-    puts @@total
+    puts "Time spent: ", Time.now - @@start
+    puts "Total goods: ", @@total
   end
 
 end
