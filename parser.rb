@@ -2,12 +2,11 @@ require 'open-uri'
 require 'csv'
 require 'nokogiri'
 require 'digest'
-require 'curl'
 
 class Parser
 
-  @@headers = %w{type, group, pic, name}
-  @@catalog  ||= CSV.read("catalog.txt", "a+", col_sep: "\t", headers: true, converters: :numeric, header_converters: :symbol).map { |row| row.to_h }
+  @@headers        ||= %w{type, group, pic, name}
+  @@catalog        ||= CSV.read("catalog.txt", "a+", col_sep: "\t", headers: true, converters: :numeric, header_converters: :symbol).map { |row| row.to_h }
   @@depth          ||= 0    # глубина рекурсии
   @@col_sep        ||= "\t" # разделитель для print
   @@total          ||= 0    # общее количество записей
@@ -15,7 +14,8 @@ class Parser
   @@current_group  ||= ""
   @@start          ||= Time.now
   @@wo_pic         ||= 0
-
+  @@pic_size       ||= Hash.new(0)
+  @@total_size     ||= 0
   def initialize(url)
     @catalog_html = open(url, "Cookie" => "pgs=500") # скачиваем страницу, она в windows-1251
     @catalog_doc  = Nokogiri::HTML(@catalog_html) # создаём документ
@@ -81,12 +81,27 @@ class Parser
     end
   end
 
+  # Наличие этого метода само со себе является костылём,
+  # спасающим от непонятного бага с кривым скачиванием страницы
+  # методом open (да и любым другим методом, пробовал curl и curb - 
+  # всё одинаково). Суть проблемы в том, что при скачивании страницы 
+  # теряются ссылки на группы - кнопка остаётся, сама ссылка тоже остаётся,
+  # но затирается конец ссылки, всё что после последнего слеша.
+  # Этот метод выцепляет все эти ссылки из футера страницы.
+  # Но оказалось, что там есть две устаревшие ссылки,
+  # которые нужно бы исключить из результата:
+  # /catalog/340/
+  # /catalog/343/
+  # 
   def scan_footer
     puts "--Scanning footer..."
     links = Array.new
     @catalog_doc.css('a.root').each do |row|
       links << row['href']
     end
+    bad_links = ["/catalog/340/", "/catalog/343/"]
+    links -= bad_links
+    puts links.size
     links
   end
 
@@ -100,15 +115,19 @@ class Parser
       #id = Digest::MD5.hexdigest(type+group+name)
       picture = row.to_s.scan(%r{thumbs/(.*)'\)" }m)[0]
       if picture.nil? || picture[0] == 'no_img_w280h140.png'
+        # если картинки нет - ставим прочерк
         picture = '-----------------------------------------'
         @@wo_pic += 1
       else
-        picture = picture[0]  # если картинки нет - ставим прочерк
+        picture = picture[0]
         download_item(picture) # если картинка есть - скачиваем её
+        # Картинка ещё не скачалась, но файл уже занимает её
+        # точный размер.
+        @@pic_size[picture] = File.size("pictures/"+picture)
+        @@total_size += @@pic_size[picture]
       end
       add_record([type, group, picture, name])
       @@total += 1
-      #puts @@total
       @@total_in_group[@@current_group] += 1
     end
   end
@@ -120,14 +139,21 @@ class Parser
 
   def print_stat 
     @@total_in_group.each do |group, count|
-      pc = count/@@total
+      pc = count/@@total.to_f
       puts "#{group}: #{count} items, #{pc}% of total"
     end
-    puts "Percent goods with pictures: ", ((@@total - @@wo_pic) / @@total.to_f)
+    puts "Percent goods with pictures: " + (100*(@@total - @@wo_pic) / (@@total.to_f)).round(1).to_s + "%"
+    top_size = @@pic_size.max_by { |pic, size| size }
+    puts "Top size image: " + (top_size[0]).to_s + "; size: " + ((top_size[1].to_f)/1024).round(1).to_s + " kB"
+    least_size = @@pic_size.min_by { |pic, size| size }
+    puts "Least size image: " + (least_size[0]).to_s + "; size: " + ((least_size[1].to_f)/1024).round(1).to_s + " kB"
+    average_size = (@@total_size.to_f)/1000/1024
+    puts "Average image size: " + average_size.round(1).to_s + " kB"
   end
 
   def save
     @@catalog.uniq!.compact!
+    open("tmp.txt", "w")  { |file| file.puts @@catalog }
     CSV.open("catalog.txt", "w", col_sep: "\t", encoding: 'UTF-8', headers: true) do |cat|
       @@catalog.each do |row|
         cat << row
