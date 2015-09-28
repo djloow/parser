@@ -6,7 +6,11 @@ require 'digest'
 class Parser
 
   @@headers        ||= %w{type, group, pic, name}
-  @@catalog        ||= CSV.read("catalog.txt", "a+", col_sep: "\t", headers: true, converters: :numeric, header_converters: :symbol).map { |row| row.to_h }
+  if File.exist?("catalog.txt")
+    @@catalog      ||= CSV.read("catalog.txt", "r", col_sep: "\t", headers: false, converters: :numeric, header_converters: :symbol).map { |row| row.to_a } 
+  else
+    @@catalog      ||= CSV.read("catalog.txt", "w+") 
+  end
   @@depth          ||= 0    # глубина рекурсии
   @@col_sep        ||= "\t" # разделитель для print
   @@total          ||= 0    # общее количество записей
@@ -16,6 +20,7 @@ class Parser
   @@wo_pic         ||= 0
   @@pic_size       ||= Hash.new(0)
   @@total_size     ||= 0
+
   def initialize(url)
     @catalog_html = open(url, "Cookie" => "pgs=500") # скачиваем страницу, она в windows-1251
     @catalog_doc  = Nokogiri::HTML(@catalog_html) # создаём документ
@@ -101,7 +106,6 @@ class Parser
     end
     bad_links = ["/catalog/340/", "/catalog/343/"]
     links -= bad_links
-    puts links.size
     links
   end
 
@@ -133,13 +137,20 @@ class Parser
   end
 
   def add_record(arr)
+    row = Hash.new
+    row[:type]  = arr[0]
+    row[:group] = arr[1]
+    row[:pic]   = arr[2]
+    row[:name]  = arr[3]
     @@catalog << arr
-    print_stat if @@total == 1000
+    if @@total == 1000
+      print_stat
+    end
   end
 
   def print_stat 
     @@total_in_group.each do |group, count|
-      pc = count/@@total.to_f
+      pc = 100*count/@@total.to_f
       puts "#{group}: #{count} items, #{pc}% of total"
     end
     puts "Percent goods with pictures: " + (100*(@@total - @@wo_pic) / (@@total.to_f)).round(1).to_s + "%"
@@ -152,9 +163,9 @@ class Parser
   end
 
   def save
-    @@catalog.uniq!.compact!
-    open("tmp.txt", "w")  { |file| file.puts @@catalog }
-    CSV.open("catalog.txt", "w", col_sep: "\t", encoding: 'UTF-8', headers: true) do |cat|
+    @@catalog.uniq!
+    open("tmp.txt", "w")  { |file| file.puts @@catalog.inspect } # DBG 
+    CSV.open("catalog.txt", "w", col_sep: "\t", encoding: 'UTF-8', headers: true, converters: :numeric, header_converters: :symbol) do |cat|
       @@catalog.each do |row|
         cat << row
       end
