@@ -2,6 +2,7 @@ require 'open-uri'
 require 'csv'
 require 'nokogiri'
 require 'digest'
+require 'ruby-progressbar'
 
 class Parser
 
@@ -20,6 +21,7 @@ class Parser
   @@wo_pic         ||= 0
   @@pic_size       ||= Hash.new(0)
   @@total_size     ||= 0
+  @@progressbar    ||= ProgressBar.create
 
   def initialize(url)
     @catalog_html = open(url, "Cookie" => "pgs=500") # скачиваем страницу, она в windows-1251
@@ -44,7 +46,7 @@ class Parser
 
   # Метод составляет список категорий с главной страницы сайта и загружает соответствующие картинки
   def scan_groups
-    puts "-Scanning groups..."
+    #puts "-Scanning groups..."
     @@depth += 1
     #puts "***Depth is #{@@depth}"
     group = @catalog_doc.css('#content.bar h1').text
@@ -52,7 +54,7 @@ class Parser
     rows.each do |row|
       type    = "sub-"*(@@depth-1)+"group"
       name    = row.to_s.scan(%r{\)">(.*)<span>}m)[0][0] # названия главных категорий с главной страницы сайта
-      puts name
+      #puts name
       #id      = Digest::MD5.hexdigest(type+group+name)
       picture = row.to_s.scan(%r{thumbs/(.*)\)">}m)[0]
       #download_group(picture[0]) unless picture.nil? # если картинка есть - скачиваем её
@@ -67,14 +69,14 @@ class Parser
   end
 
   def scan_main
-    puts "Scanning main page..."
+    #puts "Scanning main page..."
     links = scan_footer
     group = "---------"
     rows = @catalog_doc.css('.children a')
     rows.each do |row|
       type    = "group"
       name    = row.to_s.scan(%r{\)">(.*)<span>}m)[0][0] # названия главных категорий с главной страницы сайта
-      puts name
+      #puts name
       @@current_group = name
       #id      = Digest::MD5.hexdigest(type+group+name)
       picture = row.to_s.scan(%r{thumbs/(.*)\)">}m)[0]
@@ -99,7 +101,7 @@ class Parser
   # /catalog/343/
   # 
   def scan_footer
-    puts "--Scanning footer..."
+    #puts "--Scanning footer..."
     links = Array.new
     @catalog_doc.css('a.root').each do |row|
       links << row['href']
@@ -110,7 +112,7 @@ class Parser
   end
 
   def scan_goods
-    puts "---Scanning goods....."
+    #puts "---Scanning goods....."
     group = @catalog_doc.css('#content.bar h1').text
     rows = @catalog_doc.css('div.goods .img')
     rows.each do |row|
@@ -137,18 +139,15 @@ class Parser
   end
 
   def add_record(arr)
-    row = Hash.new
-    row[:type]  = arr[0]
-    row[:group] = arr[1]
-    row[:pic]   = arr[2]
-    row[:name]  = arr[3]
     @@catalog << arr
     if @@total == 1000
       print_stat
     end
+    @@progressbar.increment if @@total%107 == 0
   end
 
   def print_stat 
+    puts "******************Summary by first 1000 goods******************"
     @@total_in_group.each do |group, count|
       pc = 100*count/@@total.to_f
       puts "#{group}: #{count} items, #{pc}% of total"
@@ -185,5 +184,3 @@ end
 parser = Parser.new('http://www.a-yabloko.ru/catalog')
 
 parser.start
-
-sleep 10
