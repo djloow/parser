@@ -21,7 +21,7 @@ class Parser
   @@wo_pic         ||= 0
   @@pic_size       ||= Hash.new(0)
   @@total_size     ||= 0
-  @@progressbar    ||= ProgressBar.create(total: 10747, format: "%t: |%B| %p%% complete. ")
+  @@progressbar    ||= ProgressBar.create(total: 10800, format: "%t: |%B| %p%% complete. ")
 
   def initialize(url)
     @catalog_html = open(url, "Cookie" => "pgs=500") # скачиваем страницу, она в windows-1251
@@ -135,6 +135,7 @@ class Parser
       add_record([type, group, picture, name])
       @@total += 1
       @@total_in_group[@@current_group] += 1
+      @@progressbar.increment
     end
   end
 
@@ -143,7 +144,6 @@ class Parser
     if @@total == 1000
       print_stat
     end
-    @@progressbar.increment
   end
 
   def print_stat 
