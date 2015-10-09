@@ -6,7 +6,7 @@ require 'ruby-progressbar'
 
 class Parser
 
-  @@headers        ||= %w{type, group, pic, name}
+  @@headers        ||= %w{type group pic name}
   if File.exist?("catalog.txt")
     @@catalog      ||= CSV.read("catalog.txt", "r",
                                 col_sep: "\t",
@@ -32,6 +32,7 @@ class Parser
     @catalog_doc  = Nokogiri::HTML(@catalog_html)
     @catalog_doc.encoding = 'UTF-8'
   end
+
   def download_group(pic)
 
     open('pictures/'+pic, 'wb') do |file|
