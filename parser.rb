@@ -4,27 +4,27 @@ require 'nokogiri'
 require 'ruby-progressbar'
 
 class Parser
-
-  $headers        ||= %w{type group pic name}
-  if File.exist?("catalog.txt")
-    $catalog      ||= CSV.read("catalog.txt", "r",
-                                col_sep: "\t",
-                                headers: false,
-                                converters: :numeric,
-                                header_converters: :symbol).map { |row| row.to_a } 
+  $headers ||= %w(type group pic name)
+  if File.exist?('catalog.txt')
+    $catalog ||= CSV.read('catalog.txt', 'r',
+                          col_sep: "\t",
+                          headers: false,
+                          header_converters: :symbol,
+                          converters: :numeric
+    ).map(&:to_a)
   else
-    $catalog      ||= CSV.read("catalog.txt", "w+") 
+    $catalog ||= CSV.read('catalog.txt', 'w+') 
   end
-  $depth          ||= 0
-  $col_sep        ||= "\t"
-  $total          ||= 0.0
+  $depth ||= 0
+  $col_sep ||= "\t"
+  $total ||= 0.0
   $total_in_group ||= Hash.new(0.0)
-  $current_group  ||= ""
-  $start          ||= Time.now
-  $wo_pic         ||= 0.0
-  $pic_size       ||= Hash.new(0.0)
-  $total_size     ||= 0.0
-  $progressbar    ||= ProgressBar.create(total: 10850, format: "%t: |%B| %p%% complete. ")
+  $current_group ||= ''
+  $start ||= Time.now
+  $wo_pic ||= 0.0
+  $pic_size ||= Hash.new(0.0)
+  $total_size ||= 0.0
+  $progressbar ||= ProgressBar.create(total: 10850, format: "%t: |%B| %p%% complete. ")
 
   def initialize(url)
     @catalog_html = open(url, "Cookie" => "pgs=500")
@@ -146,7 +146,8 @@ class Parser
              encoding: 'UTF-8',
              headers: true,
              converters: :numeric,
-             header_converters: :symbol) do |cat|
+             header_converters: :symbol
+    ) do |cat|
       $catalog.each do |row|
         cat << row
       end
