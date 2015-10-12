@@ -2,7 +2,7 @@ require 'ruby-progressbar'
 
 module Stats
   class << self
-    attr_accessor :total, :total_in_group, :current_group, :start 
+    attr_accessor :total, :total_in_group, :current_group, :start
     attr_accessor :wo_pic, :pic_size, :total_size, :progressbar
 
     def init
@@ -13,11 +13,11 @@ module Stats
       @wo_pic = 0.0
       @pic_size = Hash.new(0.0)
       @total_size = 0.0
-      @progressbar = ProgressBar.create(total: 10850, format: "%t: |%B| %p%% complete. ")
+      @progressbar = ProgressBar.create(total: 10_850, format: '%t: |%B| %p%% complete. ')
     end
 
     def print_stat 
-      puts "******************Summary by first 1000 goods******************"
+      puts '******************Summary by first 1000 goods******************'
       @total_in_group.each do |group, count|
         pc = (count/@total)*100
         puts "#{group}: #{count} items, #{pc}% of total"

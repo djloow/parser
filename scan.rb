@@ -1,26 +1,42 @@
 require 'csv'
 require 'nokogiri'
+require 'ruby-progressbar'
 load 'stats.rb'
-
-Stats.init
 
 module Scan
   class << self
     attr_accessor :depth, :catalog, :headers, :catalog_doc
 
     def init
-      @headers ||= %w(type group pic name)
+      @headers = %w(type group pic name)
       if File.exist?('catalog.txt')
-        @catalog ||= CSV.read('catalog.txt', 'r',
-                              col_sep: "\t",
-                              headers: false,
-                              header_converters: :symbol,
-                              converters: :numeric
-        ).map(&:to_a)
+        @catalog = read_catalog
       else
-        @catalog ||= CSV.read('catalog.txt', 'w+') 
+        @catalog = create_catalog
       end
       @depth ||= 0
+    end
+
+    def read_catalog
+      CSV.read('catalog.txt', 'r',
+               col_sep: "\t",
+               headers: false,
+               header_converters: :symbol,
+               converters: :numeric
+              ).map(&:to_a)
+    end
+
+    def create_catalog
+      CSV.read('catalog.txt', 'w+')
+    end
+
+    def start
+      scan_main
+    end
+
+    def find_pic(row)
+      picture = row.to_s.scan(%r{thumbs/(.*)\)">}m)[0]
+      picture = picture ? picture[0] : '-'
     end
 
     def scan_groups
@@ -28,11 +44,10 @@ module Scan
       group = @catalog_doc.css('#content.bar h1').text
       rows = @catalog_doc.css('.children a')
       rows.each do |row|
-        type    = "sub-"*(@depth-1)+"group"
+        type    = 'sub-' * (@depth - 1) + 'group'
         name    = row.to_s.scan(%r{\)">(.*)<span>}m)[0][0]
-        picture = row.to_s.scan(%r{thumbs/(.*)\)">}m)[0]
-        picture = picture ? picture[0] : '-'
-        parser = Parser.new('http://www.a-yabloko.ru'+row['href'])
+        picture = find_pic(row)
+        parser = Parser.new('http://www.a-yabloko.ru' + row['href'])
         add_record([type, group, picture, name])
         parser.scan_groups
       end
@@ -43,27 +58,26 @@ module Scan
 
     def scan_main
       links = scan_footer
-      group = "---------"
+      group = '-'
       rows = @catalog_doc.css('.children a')
       rows.each do |row|
-        type    = "group"
+        type    = 'group'
         name    = row.to_s.scan(%r{\)">(.*)<span>}m)[0][0]
         Stats.current_group = name
-        picture = row.to_s.scan(%r{thumbs/(.*)\)">}m)[0]
+        picture = find_pic(row)
         download_group(picture[0]) unless picture.nil?
-        picture = picture ? picture[0] : '-'
-        parser = Parser.new('http://www.a-yabloko.ru'+links.shift)
+        parser = Parser.new('http://www.a-yabloko.ru' + links.shift)
         add_record([type, group, picture, name])
         parser.scan_groups
       end
     end
 
     def scan_footer
-      links = Array.new
+      links = []
       @catalog_doc.css('a.root').each do |row|
         links << row['href']
       end
-      bad_links = ["/catalog/340/", "/catalog/343/"]
+      bad_links = ['/catalog/340/', '/catalog/343/']
       links -= bad_links
       links
     end
@@ -81,7 +95,7 @@ module Scan
         else
           picture = picture[0]
           download_item(picture)
-          Stats.pic_size[picture] = File.size("pictures/"+picture)
+          Stats.pic_size[picture] = File.size('pictures/' + picture)
           Stats.total_size += Stats.pic_size[picture]
         end
         add_record([type, group, picture, name])
@@ -92,26 +106,26 @@ module Scan
     end
 
     def download_group(pic)
-      open('pictures/'+pic, 'wb') do |file|
-        file << open('http://www.a-yabloko.ru/storage/catalog/.thumbs/'+pic).read
+      open('pictures/' + pic, 'wb') do |file|
+        file << open('http://www.a-yabloko.ru/storage/catalog/.thumbs/' + pic).read
       end
     end
 
     def download_item(pic)
-      open('pictures/'+pic, 'wb') do |file|
-        file << open('http://www.a-yabloko.ru/storage/catalog/goods/.thumbs/'+pic).read
+      open('pictures/' + pic, 'wb') do |file|
+        file << open('http://www.a-yabloko.ru/storage/catalog/goods/.thumbs/' + pic).read
       end
     end
 
     def save
       Scan.catalog.uniq!
-      CSV.open("catalog.txt", "w",
+      CSV.open('catalog.txt', 'w',
                col_sep: "\t",
                encoding: 'UTF-8',
                headers: true,
                converters: :numeric,
                header_converters: :symbol
-      ) do |cat|
+              ) do |cat|
         Scan.catalog.each do |row|
           cat << row
         end
@@ -122,10 +136,7 @@ module Scan
       Scan.catalog << arr
       if Stats.total == 1000
         Stats.print_stat
-        save
       end
     end
-
   end
 end
-
